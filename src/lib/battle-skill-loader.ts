@@ -62,7 +62,7 @@ async function pathExists(target: string): Promise<boolean> {
 }
 
 async function findShallowestSkillFile(dir: string): Promise<string | null> {
-  let best: { path: string; depth: number } | null = null;
+  const state: { best: { path: string; depth: number } | null } = { best: null };
 
   async function walk(current: string, depth: number): Promise<void> {
     if (depth > MAX_SEARCH_DEPTH) return;
@@ -70,8 +70,8 @@ async function findShallowestSkillFile(dir: string): Promise<string | null> {
     for (const filename of SKILL_FILENAMES) {
       const candidate = path.join(current, filename);
       if (await pathExists(candidate)) {
-        if (!best || depth < best.depth) {
-          best = { path: candidate, depth };
+        if (!state.best || depth < state.best.depth) {
+          state.best = { path: candidate, depth };
         }
       }
     }
@@ -93,7 +93,7 @@ async function findShallowestSkillFile(dir: string): Promise<string | null> {
   }
 
   await walk(dir, 0);
-  return best?.path ?? null;
+  return state.best?.path ?? null;
 }
 
 async function loadRepoAgentDoc(root: string): Promise<{ content: string; path: string } | null> {
@@ -338,7 +338,7 @@ export async function loadSkillContent(
   };
 }
 
-export function buildSkillSystemPrompt(entry: DirectoryEntry, skillContent: string): string {
+export function buildSkillSystemPrompt(entry: Pick<DirectoryEntry, "name">, skillContent: string): string {
   return `You are a design-variant generator. An agent skill is loaded and must shape the visual output.
 
 ## Loaded skill: ${entry.name}

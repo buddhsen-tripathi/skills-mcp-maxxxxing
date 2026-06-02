@@ -7,4 +7,4 @@ export const battleModels = [
 
 export type BattleModelId = (typeof battleModels)[number]["id"];
 
-export const defaultBattleModels: [BattleModelId, BattleModelId] = ["openai/gpt-5.4-mini", "openai/gpt-5.4"];
+export const defaultBattleModels: [BattleModelId, BattleModelId] = ["openai/gpt-5.4-mini", "openai/gpt-5.4-mini"];

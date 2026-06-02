@@ -1,9 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
+import { Swords } from "lucide-react";
 
 import { CopyFeedbackButton } from "@/components/copy-feedback-button";
 import { Collapsible } from "@/components/collapsible";
+import { Button } from "@/components/ui/button";
+import { storePendingMegaskill } from "@/lib/battle-custom-skill";
 import type { Megaskill } from "@/lib/types";
 
 export function MegaskillPanel({ megaskill }: { megaskill: Megaskill }) {
@@ -44,6 +48,17 @@ export function MegaskillPanel({ megaskill }: { megaskill: Megaskill }) {
         <CopyFeedbackButton value={megaskill.installScript} copyKey="megaskill-install" variant="outline" size="default">
           Copy install script
         </CopyFeedbackButton>
+        <Button variant="outline" size="default" className="gap-1.5" asChild>
+          <Link
+            href="/battle"
+            onClick={() => {
+              storePendingMegaskill({ name: megaskill.name, content: megaskill.skillMarkdown }, "left");
+            }}
+          >
+            <Swords className="h-3.5 w-3.5" />
+            Battle this megaskill
+          </Link>
+        </Button>
       </div>
 
       <Collapsible expanded={expanded}>

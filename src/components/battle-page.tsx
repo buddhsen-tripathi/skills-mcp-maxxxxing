@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Swords, Trophy } from "lucide-react";
 
 import { BattlePane, messageText, useBattleChat } from "@/components/battle-pane";
+import { PasteMegaskillDialog } from "@/components/paste-megaskill-dialog";
 import {
   PromptInput,
   PromptInputBody,
@@ -16,6 +17,7 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 import { defaultBattleModels, type BattleModelId } from "@/lib/battle-models";
 import type { BattleJudgment } from "@/lib/battle-judgment";
+import { consumePendingMegaskill, type CustomBattleSkill } from "@/lib/battle-custom-skill";
 import { battlePresets, defaultBattlePreset, resolveToolId, type BattlePreset } from "@/lib/battle-presets";
 import type { Catalog, DirectoryEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -102,11 +104,25 @@ function JudgeBar({
   );
 }
 
+function fightersMatch(
+  leftToolId: string,
+  rightToolId: string,
+  leftCustom: CustomBattleSkill | null,
+  rightCustom: CustomBattleSkill | null,
+): boolean {
+  if (leftCustom && rightCustom) return leftCustom.content === rightCustom.content;
+  if (leftCustom || rightCustom) return false;
+  return leftToolId === rightToolId;
+}
+
 export function BattlePage({ catalog }: { catalog: Catalog }) {
   const skills = useMemo(() => catalog.items.filter((item) => item.kind === "skill"), [catalog.items]);
   const defaults = defaultFighters(skills);
   const [leftToolId, setLeftToolId] = useState(defaults[0].id);
   const [rightToolId, setRightToolId] = useState(defaults[1].id);
+  const [leftCustomSkill, setLeftCustomSkill] = useState<CustomBattleSkill | null>(null);
+  const [rightCustomSkill, setRightCustomSkill] = useState<CustomBattleSkill | null>(null);
+  const [pasteTarget, setPasteTarget] = useState<"left" | "right" | null>(null);
   const [leftModelId, setLeftModelId] = useState<BattleModelId>(defaultBattleModels[0]);
   const [rightModelId, setRightModelId] = useState<BattleModelId>(defaultBattleModels[1]);
   const [draft, setDraft] = useState(defaultBattlePreset.prompt);
@@ -116,8 +132,8 @@ export function BattlePage({ catalog }: { catalog: Catalog }) {
   const [judging, setJudging] = useState(false);
   const lastJudgedRef = useRef<string | null>(null);
 
-  const leftChat = useBattleChat(leftToolId, leftModelId, "battle-left");
-  const rightChat = useBattleChat(rightToolId, rightModelId, "battle-right");
+  const leftChat = useBattleChat(leftToolId, leftModelId, "battle-left", leftCustomSkill);
+  const rightChat = useBattleChat(rightToolId, rightModelId, "battle-right", rightCustomSkill);
 
   const left = useMemo(() => skills.find((i) => i.id === leftToolId) ?? skills[0], [skills, leftToolId]);
   const right = useMemo(
@@ -125,10 +141,38 @@ export function BattlePage({ catalog }: { catalog: Catalog }) {
     [skills, rightToolId],
   );
 
+  const leftDisplayName = leftCustomSkill?.name ?? left.name;
+  const rightDisplayName = rightCustomSkill?.name ?? right.name;
+
   const leftBusy = leftChat.status === "streaming" || leftChat.status === "submitted";
   const rightBusy = rightChat.status === "streaming" || rightChat.status === "submitted";
-  const sameTool = leftToolId === rightToolId;
+  const sameTool = fightersMatch(leftToolId, rightToolId, leftCustomSkill, rightCustomSkill);
   const combinedStatus = leftBusy || rightBusy ? (leftBusy && rightBusy ? leftChat.status : "streaming") : "ready";
+
+  useEffect(() => {
+    const pending = consumePendingMegaskill();
+    if (!pending) return;
+    if (pending.side === "right") {
+      setRightCustomSkill({ name: pending.name, content: pending.content });
+    } else {
+      setLeftCustomSkill({ name: pending.name, content: pending.content });
+    }
+  }, []);
+
+  const applyCustomSkill = useCallback(
+    (side: "left" | "right", skill: CustomBattleSkill) => {
+      if (side === "left") {
+        setLeftCustomSkill(skill);
+        leftChat.setMessages([]);
+      } else {
+        setRightCustomSkill(skill);
+        rightChat.setMessages([]);
+      }
+      setJudgment(null);
+      lastJudgedRef.current = null;
+    },
+    [leftChat, rightChat],
+  );
 
   const sendMessage = useCallback(
     (text: string) => {
@@ -149,6 +193,8 @@ export function BattlePage({ catalog }: { catalog: Catalog }) {
     setDraft(defaultBattlePreset.prompt);
     setLeftToolId(resolveToolId(skills, defaultBattlePreset.leftSlug, skills[0].id));
     setRightToolId(resolveToolId(skills, defaultBattlePreset.rightSlug, skills[1]?.id ?? skills[0].id));
+    setLeftCustomSkill(null);
+    setRightCustomSkill(null);
     setActivePresetId(defaultBattlePreset.id);
     setJudgment(null);
     lastJudgedRef.current = null;
@@ -161,6 +207,8 @@ export function BattlePage({ catalog }: { catalog: Catalog }) {
       rightChat.setMessages([]);
       setLeftToolId(resolveToolId(skills, preset.leftSlug, skills[0].id));
       setRightToolId(resolveToolId(skills, preset.rightSlug, skills[1]?.id ?? skills[0].id));
+      setLeftCustomSkill(null);
+      setRightCustomSkill(null);
       setDraft(preset.prompt);
       setActivePresetId(preset.id);
       setJudgment(null);
@@ -194,8 +242,8 @@ export function BattlePage({ catalog }: { catalog: Catalog }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         prompt: messageText(lastUser),
-        leftSkill: left.name,
-        rightSkill: right.name,
+        leftSkill: leftDisplayName,
+        rightSkill: rightDisplayName,
         leftOutput: leftText,
         rightOutput: rightText,
       }),
@@ -207,10 +255,20 @@ export function BattlePage({ catalog }: { catalog: Catalog }) {
       .then(setJudgment)
       .catch(() => setJudgment(null))
       .finally(() => setJudging(false));
-  }, [leftChat.messages, rightChat.messages, leftBusy, rightBusy, sameTool, left.name, right.name]);
+  }, [leftChat.messages, rightChat.messages, leftBusy, rightBusy, sameTool, leftDisplayName, rightDisplayName]);
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-background">
+      <PasteMegaskillDialog
+        open={pasteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setPasteTarget(null);
+        }}
+        onApply={(skill) => {
+          if (pasteTarget) applyCustomSkill(pasteTarget, skill);
+          setPasteTarget(null);
+        }}
+      />
       <header className="flex h-12 shrink-0 items-center justify-between gap-4 border-b border-border px-4">
         <div className="flex min-w-0 items-center gap-4">
           <Link href="/" className="inline-flex items-center gap-2 text-sm font-medium">
@@ -248,7 +306,7 @@ export function BattlePage({ catalog }: { catalog: Catalog }) {
             onSelect={applyPreset}
           />
 
-          <JudgeBar judgment={judgment} judging={judging} leftName={left.name} rightName={right.name} />
+          <JudgeBar judgment={judgment} judging={judging} leftName={leftDisplayName} rightName={rightDisplayName} />
 
           {sameTool ? (
             <p className="border-b border-border px-4 py-2 text-center text-xs text-destructive">
@@ -259,10 +317,17 @@ export function BattlePage({ catalog }: { catalog: Catalog }) {
           <div className="flex min-h-0 flex-1">
             <BattlePane
               entry={left}
+              displayName={leftDisplayName}
+              customSkill={leftCustomSkill}
               modelId={leftModelId}
               options={skills}
-              onSelectSkill={setLeftToolId}
+              onSelectSkill={(id) => {
+                setLeftCustomSkill(null);
+                setLeftToolId(id);
+              }}
               onSelectModel={setLeftModelId}
+              onPasteMegaskill={() => setPasteTarget("left")}
+              onClearCustomSkill={() => setLeftCustomSkill(null)}
               messages={leftChat.messages}
               status={leftChat.status}
               error={leftChat.error}
@@ -274,10 +339,17 @@ export function BattlePage({ catalog }: { catalog: Catalog }) {
             />
             <BattlePane
               entry={right}
+              displayName={rightDisplayName}
+              customSkill={rightCustomSkill}
               modelId={rightModelId}
               options={skills}
-              onSelectSkill={setRightToolId}
+              onSelectSkill={(id) => {
+                setRightCustomSkill(null);
+                setRightToolId(id);
+              }}
               onSelectModel={setRightModelId}
+              onPasteMegaskill={() => setPasteTarget("right")}
+              onClearCustomSkill={() => setRightCustomSkill(null)}
               messages={rightChat.messages}
               status={rightChat.status}
               error={rightChat.error}

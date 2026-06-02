@@ -33,6 +33,7 @@ import {
 } from "@/components/ai-elements/model-selector";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
 import { battleModels, type BattleModelId } from "@/lib/battle-models";
+import type { CustomBattleSkill } from "@/lib/battle-custom-skill";
 import { extractVariantJsx, messageText as partsToText } from "@/lib/battle-react-extract";
 import { fetchSkillMeta, skillSourceLabel, type SkillMeta } from "@/lib/battle-skill-meta";
 import type { DirectoryEntry } from "@/lib/types";
@@ -169,7 +170,12 @@ function BattleMessage({ message, streaming }: { message: UIMessage; streaming?:
   );
 }
 
-export function useBattleChat(toolId: string, modelId: BattleModelId, chatId: string) {
+export function useBattleChat(
+  toolId: string | null,
+  modelId: BattleModelId,
+  chatId: string,
+  customSkill: CustomBattleSkill | null,
+) {
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -179,12 +185,14 @@ export function useBattleChat(toolId: string, modelId: BattleModelId, chatId: st
             ...body,
             messages,
             id,
-            toolId,
             model: modelId,
+            ...(customSkill
+              ? { customSkill, toolId: undefined }
+              : { toolId, customSkill: undefined }),
           },
         }),
       }),
-    [toolId, modelId],
+    [toolId, modelId, customSkill],
   );
 
   return useChat({
@@ -196,20 +204,28 @@ export function useBattleChat(toolId: string, modelId: BattleModelId, chatId: st
 
 export function BattlePane({
   entry,
+  displayName,
+  customSkill,
   modelId,
   options,
   onSelectSkill,
   onSelectModel,
+  onPasteMegaskill,
+  onClearCustomSkill,
   messages,
   status,
   error,
   onReset,
 }: {
   entry: DirectoryEntry;
+  displayName: string;
+  customSkill: CustomBattleSkill | null;
   modelId: BattleModelId;
   options: DirectoryEntry[];
   onSelectSkill: (id: string) => void;
   onSelectModel: (id: BattleModelId) => void;
+  onPasteMegaskill: () => void;
+  onClearCustomSkill: () => void;
   messages: UIMessage[];
   status: "ready" | "submitted" | "streaming" | "error";
   error?: Error;
@@ -222,8 +238,20 @@ export function BattlePane({
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   const lastAssistantText = lastAssistant ? messageText(lastAssistant) : "";
   const variantJsx = lastAssistantText ? extractVariantJsx(lastAssistantText, isStreaming) : null;
+  const usingCustomSkill = customSkill !== null;
+  const skillPreview = usingCustomSkill
+    ? customSkill.content.length <= 500
+      ? customSkill.content
+      : `${customSkill.content.slice(0, 500)}…`
+    : skillMeta?.preview;
 
   useEffect(() => {
+    if (usingCustomSkill) {
+      setSkillMeta(null);
+      setSkillLoading(false);
+      return;
+    }
+
     let cancelled = false;
     setSkillLoading(true);
     void fetchSkillMeta(entry.id, true)
@@ -240,26 +268,50 @@ export function BattlePane({
     return () => {
       cancelled = true;
     };
-  }, [entry.id]);
+  }, [entry.id, usingCustomSkill]);
 
   const refreshSkill = useCallback(() => {
+    if (usingCustomSkill) return;
     setSkillLoading(true);
     void fetchSkillMeta(entry.id, true)
       .then(setSkillMeta)
       .finally(() => setSkillLoading(false));
-  }, [entry.id]);
+  }, [entry.id, usingCustomSkill]);
 
   return (
     <section className="flex min-w-0 flex-1 flex-col border-r border-border last:border-r-0">
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
         <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-          <SkillSelect value={entry.id} options={options} onChange={onSelectSkill} />
+          {usingCustomSkill ? (
+            <div className="inline-flex max-w-full min-w-0 items-center gap-2 rounded-md py-1 pr-1">
+              <Wrench className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="truncate text-sm font-medium">{displayName}</span>
+            </div>
+          ) : (
+            <SkillSelect value={entry.id} options={options} onChange={onSelectSkill} />
+          )}
           <BattleModelPicker value={modelId} onChange={onSelectModel} />
-          <SkillLoadBadge meta={skillMeta} loading={skillLoading} />
+          {usingCustomSkill ? (
+            <span className="inline-flex items-center rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
+              Pasted megaskill
+            </span>
+          ) : (
+            <SkillLoadBadge meta={skillMeta} loading={skillLoading} />
+          )}
         </div>
-        <Button variant="ghost" size="icon-sm" onClick={onReset} title="Reset pane">
-          <RotateCcw className="size-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={onPasteMegaskill}>
+            Paste
+          </Button>
+          {usingCustomSkill ? (
+            <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={onClearCustomSkill}>
+              Catalog
+            </Button>
+          ) : null}
+          <Button variant="ghost" size="icon-sm" onClick={onReset} title="Reset pane">
+            <RotateCcw className="size-4" />
+          </Button>
+        </div>
       </header>
 
       <Collapsible className="border-b border-border px-3 py-2">
@@ -268,7 +320,12 @@ export function BattlePane({
           <ChevronDown className="size-3.5" />
         </CollapsibleTrigger>
         <CollapsibleContent className="mt-2 max-h-32 overflow-auto rounded-md border border-border bg-muted/30 p-2">
-          {skillLoading ? (
+          {usingCustomSkill ? (
+            <div className="space-y-1">
+              <p className="font-mono text-[10px] text-muted-foreground">pasted://megaskill</p>
+              <pre className="whitespace-pre-wrap text-xs text-foreground">{skillPreview}</pre>
+            </div>
+          ) : skillLoading ? (
             <p className="text-xs text-muted-foreground">Installing and loading SKILL.md…</p>
           ) : skillMeta ? (
             <div className="space-y-1">
@@ -294,7 +351,7 @@ export function BattlePane({
         ) : (
           <div className="flex h-full min-h-[200px] items-center justify-center text-center">
             <p className="max-w-xs text-sm text-muted-foreground">
-              {isStreaming ? `Generating variant with ${entry.name}…` : `Run a prompt to preview a React variant shaped by ${entry.name}.`}
+              {isStreaming ? `Generating variant with ${displayName}…` : `Run a prompt to preview a React variant shaped by ${displayName}.`}
             </p>
           </div>
         )}

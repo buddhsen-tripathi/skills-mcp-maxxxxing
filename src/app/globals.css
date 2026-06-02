@@ -218,6 +218,12 @@
   :root {
     color-scheme: light;
   }
+  html.theme-disabled,
+  html.theme-disabled *,
+  html.theme-disabled *::before,
+  html.theme-disabled *::after {
+    transition: none !important;
+  }
   * {
     @apply border-border outline-ring/50;
   }

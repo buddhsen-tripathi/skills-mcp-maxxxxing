@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Copy, Database, PlugZap, Wrench, X } from "lucide-react";
+import { Copy, Database, PlugZap, Swords, Wrench, X } from "lucide-react";
 
 import { AgentQuery } from "@/components/agent-query";
 import { AgentResults } from "@/components/agent-results";
@@ -40,7 +41,7 @@ function EntryCard({ item, highlight }: { item: DirectoryEntry; highlight?: bool
 
   return (
     <article
-      className={`rounded-lg border bg-card p-6 shadow-sm transition-colors hover:border-ring hover:bg-accent/50 ${
+      className={`rounded-lg border bg-card p-6 shadow-sm hover:border-ring hover:bg-accent/50 ${
         highlight ? "border-ring" : "border-border"
       }`}
     >
@@ -192,6 +193,12 @@ export function CatalogPage({ initialCatalog }: { initialCatalog: Catalog }) {
                 </button>
               ) : null}
             </div>
+            <Button variant="outline" size="sm" className="gap-1.5" asChild>
+              <Link href="/battle">
+                <Swords className="h-3.5 w-3.5" />
+                Battle
+              </Link>
+            </Button>
             <ThemeToggle />
           </div>
         </div>
