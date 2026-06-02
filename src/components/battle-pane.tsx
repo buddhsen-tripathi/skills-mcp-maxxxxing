@@ -12,6 +12,7 @@ import {
   ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import { JSXPreview, JSXPreviewContent, JSXPreviewError } from "@/components/ai-elements/jsx-preview";
+import { VariantLivePreview } from "@/components/variant-live-preview";
 import {
   Message,
   MessageAction,
@@ -35,7 +36,7 @@ import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-e
 import { SkillSelector } from "@/components/skill-selector";
 import { battleModels, type BattleModelId } from "@/lib/battle-models";
 import type { CustomBattleSkill } from "@/lib/battle-custom-skill";
-import { extractVariantJsx, messageText as partsToText } from "@/lib/battle-react-extract";
+import { extractVariantCode, extractVariantJsx, messageText as partsToText } from "@/lib/battle-react-extract";
 import { fetchSkillMeta, skillSourceLabel, type SkillMeta } from "@/lib/battle-skill-meta";
 import type { DirectoryEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -204,7 +205,9 @@ export function BattlePane({
   const isStreaming = status === "streaming" || status === "submitted";
   const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
   const lastAssistantText = lastAssistant ? messageText(lastAssistant) : "";
-  const variantJsx = lastAssistantText ? extractVariantJsx(lastAssistantText, isStreaming) : null;
+  const variantCode = lastAssistantText ? extractVariantCode(lastAssistantText) : null;
+  const variantJsx =
+    lastAssistantText && !variantCode ? extractVariantJsx(lastAssistantText, isStreaming) : null;
   const usingCustomSkill = customSkill !== null;
   const skillPreview = usingCustomSkill
     ? customSkill.content.length <= 500
@@ -310,7 +313,12 @@ export function BattlePane({
       </Collapsible>
 
       <div className="min-h-[240px] flex-1 overflow-auto border-b border-border bg-[linear-gradient(45deg,var(--muted)_25%,transparent_25%,transparent_75%,var(--muted)_75%,var(--muted)),linear-gradient(45deg,var(--muted)_25%,transparent_25%,transparent_75%,var(--muted)_75%,var(--muted))] bg-[length:16px_16px] bg-[position:0_0,8px_8px] p-4">
-        {variantJsx ? (
+        {variantCode && !isStreaming ? (
+          <VariantLivePreview
+            code={variantCode}
+            className="mx-auto max-w-lg rounded-xl border border-border bg-background p-4 shadow-sm"
+          />
+        ) : variantJsx ? (
           <JSXPreview jsx={variantJsx} isStreaming={isStreaming} className="mx-auto max-w-lg rounded-xl border border-border bg-background p-4 shadow-sm">
             <JSXPreviewContent />
             <JSXPreviewError />
