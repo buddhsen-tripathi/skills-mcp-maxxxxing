@@ -1,5 +1,8 @@
 import type { AgentAction, AgentResponse, Catalog } from "@/lib/types";
+import { getOpenRouterConfig } from "@/lib/openrouter";
 
+import { buildMegaskillKeyword } from "./megaskill";
+import { answerDirectoryQueryWithLlm } from "./llm-agent";
 import { parseIntent } from "./intent";
 import { buildHandoff, buildPlan, buildSummary } from "./planner";
 import { retrieveEntries } from "./retrieval";
@@ -12,7 +15,8 @@ function toActions(plan: ReturnType<typeof buildPlan>): AgentAction[] {
   }));
 }
 
-export function answerDirectoryQuery(query: string, catalog: Catalog): AgentResponse {
+/** Keyword + rules fallback when OpenRouter is unavailable or errors. */
+export function answerDirectoryQueryKeyword(query: string, catalog: Catalog): AgentResponse {
   const intent = parseIntent(query);
   const recommended = retrieveEntries(query, catalog, intent, 8);
   const plan = buildPlan(query, recommended, intent);
@@ -26,18 +30,42 @@ export function answerDirectoryQuery(query: string, catalog: Catalog): AgentResp
     new Set(
       recommended
         .flatMap((item) => item.tags)
-        .filter((tag) => !["awesome-list", "agentic", "github", "query-1", "query-2"].includes(tag)),
+        .filter((tag) => !["awesome-list", "agentic", "github", "curated-list"].includes(tag)),
     ),
   ).slice(0, 8);
+
+  const config = getOpenRouterConfig();
+  const summaryPrefix = config.enabled ? "" : "Using keyword search from the catalog. ";
 
   return {
     query,
     intent,
-    summary: buildSummary(query, plan, hadStrongMatch),
+    mode: "keyword",
+    summary: summaryPrefix + buildSummary(query, plan, hadStrongMatch),
     plan,
     recommended,
     relatedTags,
     handoff: buildHandoff(query, plan),
     actions: toActions(plan),
+    megaskill: buildMegaskillKeyword(query, plan),
   };
+}
+
+/** Primary agent: OpenRouter LLM when configured, otherwise keyword fallback. */
+export async function answerDirectoryQuery(query: string, catalog: Catalog): Promise<AgentResponse> {
+  const config = getOpenRouterConfig();
+  if (!config.enabled) {
+    return answerDirectoryQueryKeyword(query, catalog);
+  }
+
+  try {
+    return await answerDirectoryQueryWithLlm(query, catalog);
+  } catch (error) {
+    console.error("[agent] OpenRouter failed, using keyword fallback:", error);
+    const fallback = answerDirectoryQueryKeyword(query, catalog);
+    return {
+      ...fallback,
+      summary: `The AI agent could not reach OpenRouter. Showing keyword matches instead.`,
+    };
+  }
 }

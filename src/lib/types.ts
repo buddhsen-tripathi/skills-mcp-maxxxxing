@@ -46,6 +46,8 @@ export type CatalogMeta = {
   itemCount: number;
   generatedAt: string;
   kinds: Record<EntryKind, number>;
+  /** Counts by reputed-source tag (skills-sh, getdesign-md, mcp-registry, …). */
+  sources?: Record<string, number>;
 };
 
 export type AgentIntent = {
@@ -69,15 +71,40 @@ export type AgentAction = {
   agentPrompt: string;
 };
 
+export type AgentMode = "llm" | "keyword";
+
+export type MegaskillToolRef = {
+  catalogId: string;
+  name: string;
+  kind: EntryKind;
+  role: string;
+  command: string | null;
+};
+
+/** Composite Cursor skill (SKILL.md) built from catalog tools + user query. */
+export type Megaskill = {
+  name: string;
+  title: string;
+  description: string;
+  summary: string;
+  whenToUse: string[];
+  tools: MegaskillToolRef[];
+  installScript: string;
+  skillMarkdown: string;
+  installPath: string;
+};
+
 export type AgentResponse = {
   query: string;
   intent: AgentIntent;
+  mode: AgentMode;
   summary: string;
   plan: AgentPlanStep[];
   recommended: DirectoryEntry[];
   relatedTags: string[];
   handoff: string;
   actions: AgentAction[];
+  megaskill: Megaskill;
 };
 
 /** Loose shape from older scrapes — normalized on read/write. */

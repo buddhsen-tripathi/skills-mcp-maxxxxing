@@ -1,3 +1,4 @@
+import { isGuessedMcpCommand } from "@/lib/install-extract";
 import type { DirectoryEntry, EntryKind, LegacyDirectoryEntry } from "@/lib/types";
 
 const MAX_SUMMARY = 200;
@@ -199,19 +200,16 @@ export function normalizeEntry(raw: LegacyDirectoryEntry): DirectoryEntry {
   const description = buildDescription(raw.description, summary);
   const url = raw.source.url ?? (repo ? `https://github.com/${repo}` : undefined);
 
-  const install =
-    raw.install?.method && raw.install.agentPrompt
-      ? {
-          method: raw.install.method,
-          command: raw.install.command,
-          agentPrompt: truncate(stripNoise(raw.install.agentPrompt), 500),
-        }
-      : buildInstall(kind, raw.name, slug, repo, url);
+  const hasRealCommand =
+    Boolean(raw.install?.command) && !isGuessedMcpCommand(raw.install?.command ?? null, slug);
 
-  if (install.method === "npm" && install.command?.includes("@modelcontextprotocol/server-") && !Object.values(VERIFIED_NPM_MCP).includes(install.command)) {
-    const fixed = buildInstall(kind, raw.name, slug, repo, url);
-    Object.assign(install, fixed);
-  }
+  const install = hasRealCommand
+    ? {
+        method: raw.install!.method ?? "manual",
+        command: raw.install!.command,
+        agentPrompt: truncate(stripNoise(raw.install!.agentPrompt), 500),
+      }
+    : buildInstall(kind, raw.name, slug, repo, url);
 
   return {
     id: raw.id || `${kind}-${slug}`,
@@ -246,7 +244,22 @@ export function isQualityEntry(entry: DirectoryEntry): boolean {
   const blocked = ["dictatorship", "propaganda", "nsfw", "malware", "ransomware", "casino"];
   if (blocked.some((term) => text.includes(term))) return false;
 
-  const relevant = ["mcp", "agent", "skill", "plugin", "sdk", "llm", "coding", "developer", "cli", "automation", "ai", "tool"];
+  const relevant = [
+    "mcp",
+    "agent",
+    "skill",
+    "plugin",
+    "sdk",
+    "llm",
+    "coding",
+    "developer",
+    "cli",
+    "automation",
+    "ai",
+    "tool",
+    "design",
+    "design-md",
+  ];
   const hasRelevance =
     relevant.some((term) => text.includes(term)) ||
     entry.tags.some((tag) => relevant.includes(tag) || tag === entry.kind);

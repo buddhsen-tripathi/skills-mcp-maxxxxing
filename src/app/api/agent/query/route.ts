@@ -5,7 +5,7 @@ import { answerDirectoryQuery } from "@/lib/agent/index";
 import { readCatalog } from "@/lib/storage";
 
 const payloadSchema = z.object({
-  query: z.string().trim().min(2),
+  query: z.string().trim().min(2).max(2000),
 });
 
 export async function POST(request: Request) {
@@ -13,10 +13,10 @@ export async function POST(request: Request) {
   const parsed = payloadSchema.safeParse(body);
 
   if (!parsed.success) {
-    return NextResponse.json({ error: "Query must be at least 2 characters." }, { status: 400 });
+    return NextResponse.json({ error: "Query must be between 2 and 2000 characters." }, { status: 400 });
   }
 
   const catalog = await readCatalog();
-  const response = answerDirectoryQuery(parsed.data.query, catalog);
+  const response = await answerDirectoryQuery(parsed.data.query, catalog);
   return NextResponse.json(response);
 }

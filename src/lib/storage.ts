@@ -37,15 +37,27 @@ export async function writeCatalog(catalog: Catalog): Promise<void> {
   await fs.writeFile(CATALOG_STORE_PATH, JSON.stringify(validated, null, 2), "utf8");
 }
 
+const SOURCE_TAGS = ["skills-sh", "getdesign-md", "mcp-registry", "agent-skill-co", "curated-list"] as const;
+
 export async function getCatalogMeta(): Promise<CatalogMeta> {
   const catalog = await readCatalog();
   const kinds = { skill: 0, mcp: 0, plugin: 0 } as CatalogMeta["kinds"];
-  for (const item of catalog.items) kinds[item.kind] += 1;
+  const sources: Record<string, number> = {};
+
+  for (const item of catalog.items) {
+    kinds[item.kind] += 1;
+    for (const tag of SOURCE_TAGS) {
+      if (item.tags.includes(tag)) {
+        sources[tag] = (sources[tag] ?? 0) + 1;
+      }
+    }
+  }
 
   return {
     storePath: "src/data/catalog.json",
     itemCount: catalog.items.length,
     generatedAt: catalog.generatedAt,
     kinds,
+    sources,
   };
 }

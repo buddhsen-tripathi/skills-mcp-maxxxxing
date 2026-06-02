@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 import { normalizeCatalog } from "../src/lib/catalog-normalize";
+import { enrichCatalogInstalls } from "../src/lib/enrich-installs";
 import { catalogSchema } from "../src/lib/catalog-schema";
 import type { LegacyDirectoryEntry } from "../src/lib/types";
 
@@ -10,7 +11,9 @@ const STORE = path.join(process.cwd(), "src", "data", "catalog.json");
 const raw = await fs.readFile(STORE, "utf8");
 const json = JSON.parse(raw) as { generatedAt: string; items: LegacyDirectoryEntry[] };
 
-const items = normalizeCatalog(json.items);
+const normalized = normalizeCatalog(json.items);
+console.log(`Enriching install commands from READMEs (${normalized.length} entries)...`);
+const items = await enrichCatalogInstalls(normalized);
 const catalog = catalogSchema.parse({
   generatedAt: new Date().toISOString(),
   items,

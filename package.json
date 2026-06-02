@@ -8,9 +8,12 @@
     "start": "next start",
     "lint": "eslint",
     "scrape": "bun scripts/scrape.ts",
-    "normalize": "bun scripts/normalize-catalog.ts"
+    "normalize": "bun scripts/normalize-catalog.ts",
+    "enrich-installs": "bun scripts/enrich-installs.ts"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.67",
+    "ai": "^6.0.194",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.40.0",
