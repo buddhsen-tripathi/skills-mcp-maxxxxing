@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import { Fira_Code, Merriweather, Oxanium } from "next/font/google";
+import { Fira_Code, Merriweather, Oxanium, Geist } from "next/font/google";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { themeInitScript } from "@/lib/theme";
 import "./globals.css";
+import { cn } from "@/lib/utils";
 
-const fontSans = Oxanium({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const fontSerif = Merriweather({
   variable: "--font-serif",
@@ -37,13 +36,15 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${fontSans.variable} ${fontSerif.variable} ${fontMono.variable} h-full antialiased`}
+      className={cn("h-full", "antialiased", fontSerif.variable, fontMono.variable, "font-sans", geist.variable)}
     >
       <body className="min-h-full flex flex-col">
         <Script id="theme-init" strategy="beforeInteractive">
           {themeInitScript}
         </Script>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
