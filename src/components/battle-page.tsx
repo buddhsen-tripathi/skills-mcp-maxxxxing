@@ -116,7 +116,14 @@ function fightersMatch(
 }
 
 export function BattlePage({ catalog }: { catalog: Catalog }) {
-  const skills = useMemo(() => catalog.items.filter((item) => item.kind === "skill"), [catalog.items]);
+  const skills = useMemo(
+    () =>
+      catalog.items
+        .filter((item) => item.kind === "skill")
+        .slice()
+        .sort((a, b) => (b.metadata.stars ?? 0) - (a.metadata.stars ?? 0)),
+    [catalog.items],
+  );
   const defaults = defaultFighters(skills);
   const [leftToolId, setLeftToolId] = useState(defaults[0].id);
   const [rightToolId, setRightToolId] = useState(defaults[1].id);

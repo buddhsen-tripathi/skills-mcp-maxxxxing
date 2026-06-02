@@ -4,6 +4,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import { entrySummary } from "@/lib/display";
+import { getWritableSkillRoot, isServerlessRuntime } from "@/lib/runtime-env";
 import type { DirectoryEntry } from "@/lib/types";
 
 const execFileAsync = promisify(execFile);
@@ -20,7 +21,7 @@ export type SkillLoadResult = {
   installError?: string;
 };
 
-const SKILL_ROOT = path.join(process.cwd(), ".tools/skills");
+const SKILL_ROOT = getWritableSkillRoot();
 const MAX_SKILL_BYTES = 120_000;
 const MAX_SEARCH_DEPTH = 10;
 const SKILL_FILENAMES = new Set(["SKILL.md", "skill.md"]);
@@ -159,6 +160,19 @@ function parseGitCloneCommand(command: string): { repoUrl: string; target: strin
   return { repoUrl, target: parts[cloneIndex + 2] ?? "" };
 }
 
+function repoFromGitClone(command: string | null | undefined): string | null {
+  if (!command) return null;
+  const parsed = parseGitCloneCommand(command);
+  if (!parsed) return null;
+
+  const match = parsed.repoUrl.match(/github\.com[/:]([^/]+\/[^/?#]+)/i);
+  return match?.[1]?.replace(/\.git$/i, "") ?? null;
+}
+
+function resolveSkillRepo(entry: DirectoryEntry): string | null {
+  return entry.source.repo ?? repoFromGitClone(entry.install.command);
+}
+
 async function refreshGitRepo(repoDir: string): Promise<void> {
   try {
     await execFileAsync("git", ["-C", repoDir, "pull", "--ff-only"], { timeout: 120_000 });
@@ -232,6 +246,10 @@ export async function ensureSkillInstalled(entry: DirectoryEntry): Promise<{ ins
     return { installed: false, error: "Not a skill entry" };
   }
 
+  if (isServerlessRuntime()) {
+    return { installed: false, error: "Git install unavailable in serverless; using remote SKILL.md" };
+  }
+
   if (await loadLocalSkill(entry.slug)) {
     return { installed: true };
   }
@@ -293,6 +311,35 @@ export async function loadSkillContent(
   let installed = await isSkillInstalled(entry.slug);
   let installError: string | undefined;
 
+  const repo = resolveSkillRepo(entry);
+
+  if (isServerlessRuntime()) {
+    if (repo) {
+      const remote = await fetchRemoteSkill(repo);
+      if (remote) {
+        return {
+          content: remote.content,
+          source: "remote",
+          path: remote.path,
+          bytes: remote.content.length,
+          preview: preview(remote.content),
+          installed: false,
+        };
+      }
+    }
+
+    const content = fallbackSkillContent(entry);
+    return {
+      content,
+      source: "catalog",
+      path: null,
+      bytes: content.length,
+      preview: preview(content),
+      installed: false,
+      installError: repo ? "Remote SKILL.md not found on GitHub" : "No GitHub repo for remote fetch",
+    };
+  }
+
   if (options.install && !installed) {
     const installResult = await ensureSkillInstalled(entry);
     installed = installResult.installed;
@@ -311,8 +358,8 @@ export async function loadSkillContent(
     };
   }
 
-  if (entry.source.repo) {
-    const remote = await fetchRemoteSkill(entry.source.repo);
+  if (repo) {
+    const remote = await fetchRemoteSkill(repo);
     if (remote) {
       return {
         content: remote.content,

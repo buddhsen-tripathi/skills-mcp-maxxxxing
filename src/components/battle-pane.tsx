@@ -32,6 +32,7 @@ import {
   ModelSelectorTrigger,
 } from "@/components/ai-elements/model-selector";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
+import { SkillSelector } from "@/components/skill-selector";
 import { battleModels, type BattleModelId } from "@/lib/battle-models";
 import type { CustomBattleSkill } from "@/lib/battle-custom-skill";
 import { extractVariantJsx, messageText as partsToText } from "@/lib/battle-react-extract";
@@ -47,40 +48,6 @@ function messageText(message: UIMessage): string {
 
 function copyText(value: string) {
   void navigator.clipboard.writeText(value);
-}
-
-function SkillSelect({
-  value,
-  options,
-  onChange,
-}: {
-  value: string;
-  options: DirectoryEntry[];
-  onChange: (id: string) => void;
-}) {
-  const selected = options.find((o) => o.id === value);
-
-  return (
-    <div className="relative min-w-0">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="absolute inset-0 cursor-pointer opacity-0"
-        aria-label="Select skill"
-      >
-        {options.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.name}
-          </option>
-        ))}
-      </select>
-      <div className="inline-flex max-w-full items-center gap-2 rounded-md py-1 pr-1 transition-colors hover:bg-muted">
-        <Wrench className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <span className="truncate text-sm font-medium">{selected?.name ?? "Select skill"}</span>
-        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      </div>
-    </div>
-  );
 }
 
 function SkillLoadBadge({ meta, loading }: { meta: SkillMeta | null; loading: boolean }) {
@@ -288,7 +255,7 @@ export function BattlePane({
               <span className="truncate text-sm font-medium">{displayName}</span>
             </div>
           ) : (
-            <SkillSelect value={entry.id} options={options} onChange={onSelectSkill} />
+            <SkillSelector value={entry.id} options={options} onChange={onSelectSkill} />
           )}
           <BattleModelPicker value={modelId} onChange={onSelectModel} />
           {usingCustomSkill ? (
